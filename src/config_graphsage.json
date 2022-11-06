@@ -1,8 +1,8 @@
 {
     "task" : "link_prediction",
     
-    "dataset" : "IAEnronEmployees",
-    "dataset_path" : "/Users/raunak/Documents/Datasets/temporal-networks-network-repository/ia-enron-employees/ia-enron-employees.edges",
+    "dataset" : "Bonanza",
+    "dataset_path" : "data/buyer_item.txt",
     "mode" : "train",
     "generate_neg_examples" : "True",
     
@@ -20,7 +20,7 @@
     "num_samples" : -1,
     
     "epochs" : 9,
-    "batch_size" : 32,
+    "batch_size" : 64,
     "lr" : 5e-4,
     "weight_decay" : 5e-4,
     "stats_per_batch" : 3,

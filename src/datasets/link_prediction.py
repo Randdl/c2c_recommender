@@ -265,6 +265,11 @@ class CollegeMsg(TemporalNetworkDataset):
     def _read_from_file(self, path):
         return np.loadtxt(path, dtype=np.int64)
 
+class Bonanza(TemporalNetworkDataset):
+
+    def _read_from_file(self, path):
+        return np.loadtxt(path, dtype=np.int64)
+
 class BitcoinAlpha(TemporalNetworkDataset):
 
     def _read_from_file(self, path):
