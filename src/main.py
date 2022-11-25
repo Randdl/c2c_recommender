@@ -11,6 +11,7 @@ from torch_geometric.utils import to_dense_adj
 from torch_sparse import SparseTensor
 
 from graphsage import GraphSAGE
+from BinaryFocalLoss import _binary_focal_loss_from_logits
 
 
 def read_from_txt(file):
@@ -44,8 +45,7 @@ def main():
 
     adj = SparseTensor(row=edge_index[0], col=edge_index[1], sparse_sizes=(num_nodes, num_nodes))
     edges = adj.to_dense()
-    y = edges.clone()
-    edges = edges == 1
+    # edges = edges == 1
     adj_t = adj.t()
 
     adj_dense = to_dense_adj(edge_index=edge_index)
@@ -55,10 +55,14 @@ def main():
     data = dataset
     train_idx = list(range(8000)) + list(range(8922, 8922+2000))
 
+    print(edges.shape)
+
+    train_y = edges.clone()[train_idx, :][:, train_idx]
+
     dataloader = DataLoader([dataset], batch_size=32)
 
-    lr = 1e-3
-    epochs = 20
+    lr = 1e-2
+    epochs = 200
     hidden_dim = 75
     evaluator = None
     criterion = nn.BCEWithLogitsLoss()
@@ -72,8 +76,8 @@ def main():
         model.train()
 
         optimizer.zero_grad()
-        # out = model(data)[train_idx]
-        out = model(data)
+        out = model(data)[train_idx]
+        # out = model(data)
         # print(out.shape)
         all_pairs = torch.mm(out, out.t())
         # print(all_pairs.shape)
@@ -83,7 +87,11 @@ def main():
 
         # scores = all_pairs[data.adj_t]
         # loss = criterion(scores, data.y.squeeze(1)[train_idx].float())
-        loss = criterion(scores.squeeze(1).float(), y.squeeze(1).float())
+        # print(scores)
+        # print(train_y)
+        loss = criterion(scores.squeeze(1).float(), train_y.squeeze(1).float())
+        # loss = _binary_focal_loss_from_logits(train_y.squeeze(1), scores.squeeze(1).float(), gamma=1, pos_weight=None, label_smoothing=None)
+        # loss = loss.mean()
         print(loss)
         loss.backward()
         optimizer.step()
