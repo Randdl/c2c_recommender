@@ -112,6 +112,8 @@ def train(model, link_predictor, emb, edge_index, pos_train_edge, batch_size, op
         neg_pred = link_predictor(node_emb[neg_edge[0]], node_emb[neg_edge[1]])  # (Ne,)
 
         # Compute the corresponding negative log likelihood loss on the positive and negative edges
+        # print(-torch.log(pos_pred + 1e-15).mean())
+        # print(- torch.log(1 - neg_pred + 1e-15).mean())
         loss = -torch.log(pos_pred + 1e-15).mean() - torch.log(1 - neg_pred + 1e-15).mean()
 
         # Backpropagate and update parameters
@@ -170,6 +172,10 @@ def test(model, predictor, emb, edge_index, split_edge, batch_size):
     neg_test_pred = torch.cat(neg_test_preds, dim=0)
     print(neg_test_pred)
 
+    pos_hits = (pos_test_pred[pos_test_pred > 0.5]).shape[0]
+    neg_hits = (neg_test_pred[neg_test_pred < 0.5]).shape[0]
+    return pos_hits / pos_test_edge.size(0), neg_hits / neg_test_edge.size(0)
+
     # results = {}
     # for K in [20, 50, 100]:
     #     evaluator.K = K
@@ -202,13 +208,15 @@ def read_from_txt(file):
 
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-optim_wd = 0
-epochs = 300
-hidden_dim = 256
+optim_wd = 1e-5
+epochs = 400
+# hidden_dim = 256
+hidden_dim = 16
 dropout = 0.3
 num_layers = 3
 lr = 1e-3
-node_emb_dim = 256
+# node_emb_dim = 256
+node_emb_dim = 16
 batch_size = 64 * 1024
 
 num_buyers = 8922
@@ -251,7 +259,8 @@ link_predictor = LinkPredictor(hidden_dim, hidden_dim, 1, num_layers + 1, dropou
 split_edge = {}
 split_edge['test'] = {}
 split_edge['test']['edge'] = edge_index.clone()[:, 20000:].T
-split_edge['test']['edge_neg'] = negative_sampling(edge_index, num_nodes=num_nodes, num_neg_samples=split_edge['test']['edge'].shape[1], method='dense').T
+# split_edge['test']['edge'] = pos_train_edge
+split_edge['test']['edge_neg'] = negative_sampling(edge_index, num_nodes=num_nodes, num_neg_samples=split_edge['test']['edge'].shape[0], method='dense').T
 print(split_edge['test']['edge'].shape)
 
 optimizer = torch.optim.Adam(
@@ -261,19 +270,23 @@ optimizer = torch.optim.Adam(
 
 train_loss = []
 val_hits = []
-test_hits = []
+test_pos_hits = []
+test_neg_hits = []
 for e in range(epochs):
     loss = train(model, link_predictor, emb.weight, edge_index, pos_train_edge, batch_size, optimizer)
     print(f"Epoch {e + 1}: loss: {round(loss, 5)}")
     train_loss.append(loss)
 
     if (e+1)%10 ==0:
-        test(model, link_predictor, emb.weight, edge_index, split_edge, batch_size)
+        pos_hits, neg_hits = test(model, link_predictor, emb.weight, edge_index, split_edge, batch_size)
+        test_pos_hits.append(pos_hits)
+        test_neg_hits.append(neg_hits)
 
 plt.title('Link Prediction on OGB-ddi using GraphSAGE GNN')
 plt.plot(train_loss,label="training loss")
-plt.plot(np.arange(9,epochs,10),val_hits,label="Hits@20 on validation")
-plt.plot(np.arange(9,epochs,10),test_hits,label="Hits@20 on test")
+# plt.plot(np.arange(9,epochs,10),val_hits,label="Hits@20 on validation")
+plt.plot(np.arange(9,epochs,10),test_pos_hits,label="PHits@20 on test")
+plt.plot(np.arange(9,epochs,10),test_neg_hits,label="NHits@20 on test")
 plt.xlabel('Epochs')
 plt.legend()
 plt.show()
