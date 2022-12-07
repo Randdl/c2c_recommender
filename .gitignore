@@ -5,6 +5,7 @@ __pycache__/
 
 .idea/
 data/bonanza_2.pickle
+checkpoint/
 
 # C extensions
 *.so

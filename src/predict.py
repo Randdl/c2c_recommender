@@ -112,21 +112,7 @@ def train(model, link_predictor, emb, edge_index, pos_train_edge, batch_size, op
         neg_pred = link_predictor(node_emb[neg_edge[0]], node_emb[neg_edge[1]])  # (Ne,)
 
         # Compute the corresponding negative log likelihood loss on the positive and negative edges
-        # print(-torch.log(pos_pred + 1e-15).mean())
-        # print(- torch.log(1 - neg_pred + 1e-15).mean())
         loss = -torch.log(pos_pred + 1e-15).mean() - torch.log(1 - neg_pred + 1e-15).mean()
-        # scores = torch.cat([pos_pred, neg_pred]).view(-1)
-        # labels = torch.cat([torch.ones(pos_pred.shape[0]), torch.zeros(neg_pred.shape[0])]).to(pos_pred.device)
-        # loss = F.binary_cross_entropy(scores, labels)
-        # alpha = 0.5
-        # gamma = 1
-        #
-        # scores = torch.cat([pos_pred, neg_pred]).view(-1)
-        # labels = torch.cat([torch.ones(pos_pred.shape[0]), torch.zeros(neg_pred.shape[0])]).to(pos_pred.device)
-        # BCE_loss = F.binary_cross_entropy(scores, labels, reduction='none')
-        # pt = torch.exp(-BCE_loss)  # prevents nans when probability 0
-        # focal_loss = alpha * (1 - pt) ** gamma * BCE_loss
-        # loss = focal_loss.mean()
 
         # Backpropagate and update parameters
         loss.backward()
@@ -273,12 +259,15 @@ def run(optim_wd=.0,
     edge_index = edge_index.to(device)
 
     # evaluator = Evaluator(name='ogbl-ddi')
+    checkpoint = torch.load('checkpoint/model3_2999.pt')
 
-    emb = torch.nn.Embedding(num_nodes_1, node_emb_dim).to(device)  # each node has an embedding that has to be learnt
+    emb = nn.Embedding.from_pretrained(checkpoint['emb']).to(device)  # each node has an embedding that has to be learnt
     model = GNNStack(node_emb_dim, hidden_dim, hidden_dim, num_layers, dropout, emb=True).to(
         device)  # the graph neural network that takes all the node embeddings as inputs to message pass and agregate
     link_predictor = LinkPredictor(hidden_dim, hidden_dim, 1, num_layers + 1, dropout).to(
         device)  # the MLP that takes embeddings of a pair of nodes and predicts the existence of an edge between them
+    model.load_state_dict(checkpoint['model_state_dict'])
+    link_predictor.load_state_dict(checkpoint['link_predictor_state_dict'])
 
     split_edge = {}
     split_edge['test'] = {}
@@ -289,33 +278,8 @@ def run(optim_wd=.0,
                                                        method='dense').T
     # print(split_edge['test']['edge'].shape)
 
-    optimizer = torch.optim.Adam(
-        list(model.parameters()) + list(link_predictor.parameters()) + list(emb.parameters()),
-        lr=lr, weight_decay=optim_wd
-    )
+    pos_hits, neg_hits = test(model, link_predictor, emb.weight, edge_index, split_edge, batch_size)
 
-    train_loss = []
-    val_hits = []
-    test_pos_hits = []
-    test_neg_hits = []
-    for e in range(epochs):
-        loss = train(model, link_predictor, emb.weight, edge_index, pos_train_edge, batch_size, optimizer)
-        # print(f"Epoch {e + 1}: loss: {round(loss, 5)}")
-        train_loss.append(loss)
-
-        if (e + 1) % 10 == 0:
-            pos_hits, neg_hits = test(model, link_predictor, emb.weight, edge_index, split_edge, batch_size)
-            test_pos_hits.append(pos_hits)
-            test_neg_hits.append(neg_hits)
-
-    plt.title('Link Prediction on OGB-ddi using GraphSAGE GNN')
-    plt.plot(train_loss, label="training loss")
-    # plt.plot(np.arange(9,epochs,10),val_hits,label="Hits@20 on validation")
-    plt.plot(np.arange(9, epochs, 10), test_pos_hits, label="PHits@20 on test")
-    plt.plot(np.arange(9, epochs, 10), test_neg_hits, label="NHits@20 on test")
-    plt.xlabel('Epochs')
-    plt.legend()
-    plt.show()
 
     num_nodes2 = num_items + num_sellers
     edge_list2 = read_from_txt('data/split/item_seller.txt')
@@ -348,35 +312,8 @@ def run(optim_wd=.0,
     split_edge2['test']['edge_neg'] = negative_sampling(edge_index2, num_nodes=num_nodes2,
                                                         num_neg_samples=split_edge2['test']['edge'].shape[0],
                                                         method='dense').T
-    # print(split_edge2['test']['edge'].shape)
 
-    optimizer2 = torch.optim.Adam(
-        list(model2.parameters()) + list(link_predictor2.parameters()) + list(emb2.parameters()),
-        lr=lr, weight_decay=optim_wd
-    )
-
-    train_loss2 = []
-    val_hits2 = []
-    test_pos_hits2 = []
-    test_neg_hits2 = []
-    for e in range(epochs):
-        loss = train(model2, link_predictor2, emb2.weight, edge_index2, pos_train_edge2, batch_size, optimizer2)
-        # print(f"Epoch {e + 1}: loss: {round(loss, 5)}")
-        train_loss2.append(loss)
-
-        if (e + 1) % 10 == 0:
-            pos_hits, neg_hits = test(model2, link_predictor2, emb2.weight, edge_index2, split_edge2, batch_size)
-            test_pos_hits2.append(pos_hits)
-            test_neg_hits2.append(neg_hits)
-
-    plt.title('Link Prediction on OGB-ddi using GraphSAGE GNN')
-    plt.plot(train_loss2, label="training loss")
-    # plt.plot(np.arange(9,epochs,10),val_hits,label="Hits@20 on validation")
-    plt.plot(np.arange(9, epochs, 10), test_pos_hits2, label="PHits@20 on test")
-    plt.plot(np.arange(9, epochs, 10), test_neg_hits2, label="NHits@20 on test")
-    plt.xlabel('Epochs')
-    plt.legend()
-    plt.show()
+    pos_hits, neg_hits = test(model2, link_predictor2, emb2.weight, edge_index2, split_edge2, batch_size)
 
     gt_items = {}
     for i in test_indices2:
@@ -455,14 +392,14 @@ def run(optim_wd=.0,
 
 optim_wds = [1e-6]
 epochss = [400, 800, 1200]
-hidden_dims = [1024]
+hidden_dims = [256]
 # hidden_dim = 64
 dropouts = [0.3]
-num_layerss = [3, 5]
+num_layerss = [3]
 lrs = [1e-2, 1e-3, 1e-4]
-node_emb_dims = [1024]
+node_emb_dims = [8192]
 # node_emb_dim = 64
-batch_size = 64 * 512
+batch_size = 64 * 1024
 
 for num_layers in num_layerss:
     for optim_wd in optim_wds:
