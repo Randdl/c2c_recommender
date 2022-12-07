@@ -144,18 +144,6 @@ def test(model, predictor, emb, edge_index, split_edge, batch_size):
     pos_test_edge = split_edge['test']['edge'].to(emb.device)
     neg_test_edge = split_edge['test']['edge_neg'].to(emb.device)
 
-    # pos_valid_preds = []
-    # for perm in DataLoader(range(pos_valid_edge.size(0)), batch_size):
-    #     edge = pos_valid_edge[perm].t()
-    #     pos_valid_preds += [predictor(node_emb[edge[0]], node_emb[edge[1]]).squeeze().cpu()]
-    # pos_valid_pred = torch.cat(pos_valid_preds, dim=0)
-    #
-    # neg_valid_preds = []
-    # for perm in DataLoader(range(neg_valid_edge.size(0)), batch_size):
-    #     edge = neg_valid_edge[perm].t()
-    #     neg_valid_preds += [predictor(node_emb[edge[0]], node_emb[edge[1]]).squeeze().cpu()]
-    # neg_valid_pred = torch.cat(neg_valid_preds, dim=0)
-
     pos_test_preds = []
     for perm in DataLoader(range(pos_test_edge.size(0)), batch_size):
         edge = pos_test_edge[perm].t()
@@ -175,24 +163,6 @@ def test(model, predictor, emb, edge_index, split_edge, batch_size):
     # print('Positive:', pos_hits / pos_test_edge.size(0),
     #       'Negative:', neg_hits / neg_test_edge.size(0))
     return pos_hits / pos_test_edge.size(0), neg_hits / neg_test_edge.size(0)
-
-    # results = {}
-    # for K in [20, 50, 100]:
-    #     evaluator.K = K
-    #     valid_hits = evaluator.eval({
-    #         'y_pred_pos': pos_valid_pred,
-    #         'y_pred_neg': neg_valid_pred,
-    #     })[f'hits@{K}']
-    #     test_hits = evaluator.eval({
-    #         'y_pred_pos': pos_test_pred,
-    #         'y_pred_neg': neg_test_pred,
-    #     })[f'hits@{K}']
-
-
-#
-#     results[f'Hits@{K}'] = (valid_hits, test_hits)
-
-# return results
 
 
 def evaluate(model, predictor, emb, edge_index, test_nodes, pair_nodes, batch_size):
@@ -227,6 +197,21 @@ def read_from_txt(file):
                 list_to.append(int(node_to))
                 list_weights.append(int(weight))
     return [list_from, list_to, list_weights]
+
+
+def predict_baseline(test_nodes, edge_index, train_indices):
+    gt_nodes = {}
+    for i in train_indices:
+        i = int(i)
+        node = edge_index[0][i]
+        target = edge_index[1][i]
+        if node not in test_nodes:
+            continue
+        if node not in gt_nodes.keys():
+            gt_nodes[node] = [target]
+        else:
+            gt_nodes[node].append(target)
+    return gt_nodes
 
 
 def run(optim_wd=.0,
@@ -279,7 +264,7 @@ def run(optim_wd=.0,
     # print(split_edge['test']['edge'].shape)
 
     pos_hits, neg_hits = test(model, link_predictor, emb.weight, edge_index, split_edge, batch_size)
-    print('buyer_item:', pos_hits, neg_hits)
+
 
     num_nodes2 = num_items + num_sellers
     edge_list2 = read_from_txt('data/split/item_seller.txt')
@@ -319,7 +304,6 @@ def run(optim_wd=.0,
                                                         method='dense').T
 
     pos_hits, neg_hits = test(model2, link_predictor2, emb2.weight, edge_index2, split_edge2, batch_size)
-    print('item_seller:', pos_hits, neg_hits)
 
     gt_items = {}
     for i in test_indices2:
@@ -337,16 +321,25 @@ def run(optim_wd=.0,
     # print(sellers_list)
 
     result_seller = evaluate(model2, link_predictor2, emb2.weight, edge_index2, item_test, sellers_list, batch_size)
+    gt_result_seller = predict_baseline(item_test, edge_list2, train_indices2)
     # print(result_seller)
     item_seller_acc = []
     item_acc_dic = {}
-    for item, preds in result_seller.items():
-        gts = gt_items[item]
+    for item, gts in gt_items.items():
+        if item not in result_seller.keys():
+            item_seller_acc.append(.0)
+            item_acc_dic[item] = .0
+            continue
+        preds = result_seller[item]
+        if item not in gt_result_seller.keys():
+            bases = []
+        else:
+            bases = gt_result_seller[item]
         # print(preds[gts])
         # print(gts)
         counts = 0
         for gt in gts:
-            if gt in preds:
+            if gt in preds or gt in bases:
                 # print(preds)
                 # print(gts)
                 counts += 1
@@ -372,17 +365,26 @@ def run(optim_wd=.0,
             gt_buyers[buyer].append(item)
     # print(gt_buyers)
     result_buyer = evaluate(model, link_predictor, emb.weight, edge_index, buyer_test, items_list, batch_size)
+    gt_result_buyer = predict_baseline(buyer_test, edge_list, train_indices)
     # print(result_buyer)
     buyer_item_acc = []
     total_acc = []
-    for buyer, preds in result_buyer.items():
-        gts = gt_buyers[buyer]
+    for buyer, gts in gt_buyers.items():
+        if buyer not in result_buyer.keys():
+            buyer_item_acc.append(.0)
+            total_acc.append(.0)
+            continue
+        preds = result_buyer[buyer]
+        if buyer not in gt_result_buyer.keys():
+            bases = []
+        else:
+            bases = gt_result_buyer[buyer]
         # print(preds[gts])
         # print(gts)
         counts = 0
         weighted_counts = 0
         for gt in gts:
-            if gt in preds:
+            if gt in preds or gt in bases:
                 # print(preds)
                 # print(gts)
                 counts += 1

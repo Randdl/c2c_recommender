@@ -2,11 +2,13 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch_geometric as pyg
+from torch.optim.lr_scheduler import MultiStepLR
 from torch_geometric.data import Data
 from torch_geometric.data import DataLoader
 from torch_geometric.utils import negative_sampling
 import matplotlib.pyplot as plt
 import numpy as np
+from tqdm import tqdm
 
 
 class GNNStack(torch.nn.Module):
@@ -78,7 +80,7 @@ class LinkPredictor(nn.Module):
         return torch.sigmoid(x)
 
 
-def train(model, link_predictor, emb, edge_index, pos_train_edge, batch_size, optimizer):
+def train(model, link_predictor, emb, edge_index, pos_train_edge, batch_size, optimizer, scheduler):
     """
     Runs offline training for model, link_predictor and node embeddings given the message
     edges and supervision edges.
@@ -112,11 +114,26 @@ def train(model, link_predictor, emb, edge_index, pos_train_edge, batch_size, op
         neg_pred = link_predictor(node_emb[neg_edge[0]], node_emb[neg_edge[1]])  # (Ne,)
 
         # Compute the corresponding negative log likelihood loss on the positive and negative edges
+        # print(-torch.log(pos_pred + 1e-15).mean())
+        # print(- torch.log(1 - neg_pred + 1e-15).mean())
         loss = -torch.log(pos_pred + 1e-15).mean() - torch.log(1 - neg_pred + 1e-15).mean()
+        # scores = torch.cat([pos_pred, neg_pred]).view(-1)
+        # labels = torch.cat([torch.ones(pos_pred.shape[0]), torch.zeros(neg_pred.shape[0])]).to(pos_pred.device)
+        # loss = F.binary_cross_entropy(scores, labels)
+        # alpha = 0.5
+        # gamma = 1
+        #
+        # scores = torch.cat([pos_pred, neg_pred]).view(-1)
+        # labels = torch.cat([torch.ones(pos_pred.shape[0]), torch.zeros(neg_pred.shape[0])]).to(pos_pred.device)
+        # BCE_loss = F.binary_cross_entropy(scores, labels, reduction='none')
+        # pt = torch.exp(-BCE_loss)  # prevents nans when probability 0
+        # focal_loss = alpha * (1 - pt) ** gamma * BCE_loss
+        # loss = focal_loss.mean()
 
         # Backpropagate and update parameters
         loss.backward()
         optimizer.step()
+        scheduler.step()
 
         train_losses.append(loss.item())
     return sum(train_losses) / len(train_losses)
@@ -259,110 +276,26 @@ def run(optim_wd=.0,
     edge_index = edge_index.to(device)
 
     # evaluator = Evaluator(name='ogbl-ddi')
-    checkpoint = torch.load('checkpoint/model4_2999.pt')
 
-    emb = nn.Embedding.from_pretrained(torch.load('checkpoint/emb4_2999.pt')).to(device)  # each node has an embedding that has to be learnt
+    emb = torch.nn.Embedding(num_nodes_1, node_emb_dim).to(device)  # each node has an embedding that has to be learnt
     model = GNNStack(node_emb_dim, hidden_dim, hidden_dim, num_layers, dropout, emb=True).to(
         device)  # the graph neural network that takes all the node embeddings as inputs to message pass and agregate
     link_predictor = LinkPredictor(hidden_dim, hidden_dim, 1, num_layers + 1, dropout).to(
         device)  # the MLP that takes embeddings of a pair of nodes and predicts the existence of an edge between them
-    model.load_state_dict(checkpoint['model_state_dict'])
-    link_predictor.load_state_dict(checkpoint['link_predictor_state_dict'])
 
     split_edge = {}
     split_edge['test'] = {}
-    split_edge['test']['edge'] = edge_index.clone()[:, test_indices].T
+    split_edge['test']['edge'] = edge_index.clone()[:, val_indices].T
     # split_edge['test']['edge'] = pos_train_edge
     split_edge['test']['edge_neg'] = negative_sampling(edge_index, num_nodes=num_nodes_1,
                                                        num_neg_samples=split_edge['test']['edge'].shape[0],
                                                        method='dense').T
     # print(split_edge['test']['edge'].shape)
 
-    pos_hits, neg_hits = test(model, link_predictor, emb.weight, edge_index, split_edge, batch_size)
-    print('buyer_item:', pos_hits, neg_hits)
-
-    num_nodes2 = num_items + num_sellers
-    edge_list2 = read_from_txt('data/split/item_seller.txt')
-    edge_index2 = torch.tensor([edge_list2[0], [i + num_items for i in edge_list2[1]]])
-    # print(edge_index2.shape)
-
-    train_indices2 = np.loadtxt('data/split/item_seller_train.txt')
-    val_indices2 = np.loadtxt('data/split/item_seller_val.txt')
-    test_indices2 = np.loadtxt('data/split/item_seller_test.txt')
-
-    # split_edge = dataset.get_edge_split()
-    pos_train_edge2 = edge_index2.clone()[:, train_indices2].T
-    # print(pos_train_edge2.shape)
-
-    # graph = dataset[0]
-    edge_index2 = edge_index2.to(device)
-
-    # evaluator = Evaluator(name='ogbl-ddi')
-
-    checkpoint2 = torch.load('checkpoint/model17_3999.pt')
-
-    emb2 = nn.Embedding.from_pretrained(torch.load('checkpoint/emb17_3999.pt')).to(
-        device)  # each node has an embedding that has to be learnt
-    model2 = GNNStack(2048, hidden_dim, hidden_dim, 3, dropout, emb=True).to(
-        device)  # the graph neural network that takes all the node embeddings as inputs to message pass and agregate
-    link_predictor2 = LinkPredictor(hidden_dim, hidden_dim, 1, 3 + 1, dropout).to(
-        device)  # the MLP that takes embeddings of a pair of nodes and predicts the existence of an edge between them
-    model2.load_state_dict(checkpoint2['model_state_dict'])
-    link_predictor2.load_state_dict(checkpoint2['link_predictor_state_dict'])
-
-    split_edge2 = {}
-    split_edge2['test'] = {}
-    split_edge2['test']['edge'] = edge_index2.clone()[:, test_indices2].T
-    # split_edge['test']['edge'] = pos_train_edge
-    split_edge2['test']['edge_neg'] = negative_sampling(edge_index2, num_nodes=num_nodes2,
-                                                        num_neg_samples=split_edge2['test']['edge'].shape[0],
-                                                        method='dense').T
-
-    pos_hits, neg_hits = test(model2, link_predictor2, emb2.weight, edge_index2, split_edge2, batch_size)
-    print('item_seller:', pos_hits, neg_hits)
-
-    gt_items = {}
-    for i in test_indices2:
-        i = int(i)
-        item = edge_list2[0][i]
-        seller = edge_list2[1][i]
-        if item not in gt_items.keys():
-            gt_items[item] = [seller]
-        else:
-            gt_items[item].append(seller)
-
-    item_test = np.array(list(gt_items.keys()))
-    # print(item_test)
-    sellers_list = np.arange(num_sellers) + num_items
-    # print(sellers_list)
-
-    result_seller = evaluate(model2, link_predictor2, emb2.weight, edge_index2, item_test, sellers_list, batch_size)
-    # print(result_seller)
-    item_seller_acc = []
-    item_acc_dic = {}
-    for item, preds in result_seller.items():
-        gts = gt_items[item]
-        # print(preds[gts])
-        # print(gts)
-        counts = 0
-        for gt in gts:
-            if gt in preds:
-                # print(preds)
-                # print(gts)
-                counts += 1
-        ratio = counts / len(gts)
-        item_seller_acc.append(ratio)
-        item_acc_dic[item] = ratio
-    # print(item_seller_acc)
-    print('item_seller_acc:', np.mean(item_seller_acc))
-
-    buyer_test = np.loadtxt('data/split/buyer_test.txt')
+    buyer_test = np.loadtxt('data/split/buyer_val.txt')
     items_list = np.arange(num_items) + num_buyers
-    # print(items_list)
-    # print(test_indices)
-    # print(edge_list)
     gt_buyers = {}
-    for i in test_indices:
+    for i in val_indices:
         i = int(i)
         buyer = edge_list[0][i]
         item = edge_list[1][i]
@@ -370,38 +303,68 @@ def run(optim_wd=.0,
             gt_buyers[buyer] = [item]
         else:
             gt_buyers[buyer].append(item)
-    # print(gt_buyers)
-    result_buyer = evaluate(model, link_predictor, emb.weight, edge_index, buyer_test, items_list, batch_size)
-    # print(result_buyer)
-    buyer_item_acc = []
-    total_acc = []
-    for buyer, preds in result_buyer.items():
-        gts = gt_buyers[buyer]
-        # print(preds[gts])
-        # print(gts)
-        counts = 0
-        weighted_counts = 0
-        for gt in gts:
-            if gt in preds:
-                # print(preds)
-                # print(gts)
-                counts += 1
-                weighted_counts += item_acc_dic[gt]
-        ratio = counts / len(gts)
-        buyer_item_acc.append(ratio)
-        total_acc.append(weighted_counts)
-    # print(buyer_item_acc)
-    print('buyer_item_acc', np.mean(buyer_item_acc))
-    # print(total_acc)
-    print('total_acc', np.mean(total_acc))
+
+    optimizer = torch.optim.Adam(
+        list(model.parameters()) + list(link_predictor.parameters()) + list(emb.parameters()),
+        lr=lr, weight_decay=optim_wd
+    )
+    scheduler = MultiStepLR(optimizer, milestones=[3000], gamma=0.1)
+
+    train_loss = []
+    val_hits = []
+    test_pos_hits = []
+    test_neg_hits = []
+    buyer_item_accs = []
+    for e in tqdm(range(epochs)):
+        loss = train(model, link_predictor, emb.weight, edge_index, pos_train_edge, batch_size, optimizer, scheduler)
+        # print(f"Epoch {e + 1}: loss: {round(loss, 5)}")
+        train_loss.append(loss)
+
+        if (e + 1) % 200 == 0:
+            pos_hits, neg_hits = test(model, link_predictor, emb.weight, edge_index, split_edge, batch_size)
+            test_pos_hits.append(pos_hits)
+            test_neg_hits.append(neg_hits)
+            print(pos_hits, neg_hits)
+            result_buyer = evaluate(model, link_predictor, emb.weight, edge_index, buyer_test, items_list, batch_size)
+            buyer_item_acc = []
+            for buyer, preds in result_buyer.items():
+                gts = gt_buyers[buyer]
+                counts = 0
+                for gt in gts:
+                    if gt in preds:
+                        counts += 1
+                ratio = counts / len(gts)
+                buyer_item_acc.append(ratio)
+            print('buyer_item_acc', np.mean(buyer_item_acc))
+            buyer_item_accs.append(np.mean(buyer_item_acc))
+        if (e + 1) % 500 == 0:
+            torch.save({
+                'epoch': e,
+                'model_state_dict': model.state_dict(),
+                'link_predictor_state_dict': link_predictor.state_dict(),
+                'emb': emb.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'loss': loss,
+            }, 'checkpoint/model5_{}.pt'.format(e))
+            torch.save(emb.weight, 'checkpoint/emb5_{}.pt'.format(e))
+
+    plt.title('Link Prediction on buyer_item using GraphSAGE GNN')
+    plt.plot(train_loss, label="training loss")
+    # plt.plot(np.arange(9,epochs,10),val_hits,label="Hits@20 on validation")
+    plt.plot(np.arange(9, epochs, 200), test_pos_hits, label="PHits@20 on val")
+    plt.plot(np.arange(9, epochs, 200), test_neg_hits, label="NHits@20 on val")
+    plt.plot(np.arange(9, epochs, 200), buyer_item_accs, label="acc on val")
+    plt.xlabel('Epochs')
+    plt.legend()
+    plt.show()
 
 
 optim_wds = [1e-6]
 epochss = [400, 800, 1200]
-hidden_dims = [512]
+hidden_dims = [256]
 # hidden_dim = 64
 dropouts = [0.3]
-num_layerss = [5]
+num_layerss = [3]
 lrs = [1e-2, 1e-3, 1e-4]
 node_emb_dims = [8192]
 # node_emb_dim = 64
@@ -413,5 +376,5 @@ for num_layers in num_layerss:
             for hidden_dim in hidden_dims:
                 for node_emb_dim in node_emb_dims:
                     print(optim_wd, hidden_dim, dropout, num_layers, ':')
-                    run(optim_wd=optim_wd, epochs=1200, hidden_dim=hidden_dim, dropout=dropout, num_layers=num_layers, lr=1e-3,
+                    run(optim_wd=optim_wd, epochs=4000, hidden_dim=hidden_dim, dropout=dropout, num_layers=num_layers, lr=1e-3,
                         node_emb_dim=node_emb_dim)
