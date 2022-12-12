@@ -11,6 +11,9 @@ import numpy as np
 from tqdm import tqdm
 from utils import *
 
+dataset = 'split'
+# dataset = 'split2'
+
 
 def run(optim_wd=.0,
           epochs=800,
@@ -26,14 +29,14 @@ def run(optim_wd=.0,
     num_items = 3119
     num_sellers = 4056
     num_nodes_1 = num_buyers + num_items
-    edge_list = read_from_txt('data/split2/buyer_item.txt')
+    edge_list = read_from_txt('data/'+dataset+'/buyer_item.txt')
     edge_index = torch.tensor([edge_list[0], [i + num_buyers for i in edge_list[1]]])
     # print(edge_index.shape)
 
-    train_indices = np.loadtxt('data/split2/buyer_item_train.txt')
+    train_indices = np.loadtxt('data/'+dataset+'/buyer_item_train.txt')
     # val_indices = np.loadtxt('data/split/buyer_item_val.txt')
-    val_indices = np.loadtxt('data/split2/buyer_item_test.txt')
-    test_indices = np.loadtxt('data/split2/buyer_item_test.txt')
+    val_indices = np.loadtxt('data/'+dataset+'/buyer_item_val.txt')
+    test_indices = np.loadtxt('data/'+dataset+'/buyer_item_test.txt')
 
     # split_edge = dataset.get_edge_split()
     pos_train_edge = edge_index.clone()[:, train_indices].T
@@ -59,8 +62,7 @@ def run(optim_wd=.0,
                                                        method='dense').T
     # print(split_edge['test']['edge'].shape)
 
-    # buyer_test = np.loadtxt('data/split/buyer_val.txt')
-    buyer_test = np.loadtxt('data/split2/buyer_test.txt')
+    buyer_test = np.loadtxt('data/'+dataset+'/buyer_val.txt')
     items_list = np.arange(num_items) + num_buyers
     gt_buyers = {}
     for i in val_indices:
@@ -105,7 +107,7 @@ def run(optim_wd=.0,
                 buyer_item_acc.append(ratio)
             print('buyer_item_acc', np.mean(buyer_item_acc))
             buyer_item_accs.append(np.mean(buyer_item_acc))
-        if (e + 1) % 500 == 0:
+        if (e + 1) % 100 == 0:
             torch.save({
                 'epoch': e,
                 'model_state_dict': model.state_dict(),
@@ -113,8 +115,8 @@ def run(optim_wd=.0,
                 'emb': emb.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
                 'loss': loss,
-            }, 'checkpoint/split2_model5_{}.pt'.format(e))
-            torch.save(emb.weight, 'checkpoint/split2_emb5_{}.pt'.format(e))
+            }, 'checkpoint/'+dataset+'model1_{}.pt'.format(e))
+            torch.save(emb.weight, 'checkpoint/'+dataset+'emb1_{}.pt'.format(e))
 
     plt.title('Link Prediction on buyer_item using GraphSAGE GNN')
     plt.plot(train_loss, label="training loss")
@@ -129,10 +131,10 @@ def run(optim_wd=.0,
 
 optim_wds = [1e-6]
 epochss = [400, 800, 1200]
-hidden_dims = [512]
+hidden_dims = [256]
 # hidden_dim = 64
 dropouts = [0.3]
-num_layerss = [3]
+num_layerss = [5]
 lrs = [1e-2, 1e-3, 1e-4]
 node_emb_dims = [8192]
 # node_emb_dim = 64

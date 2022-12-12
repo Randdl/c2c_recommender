@@ -12,7 +12,12 @@ from matplotlib.ticker import PercentFormatter
 from scipy.sparse.linalg import svds
 from utils import *
 
+dataset = 'split'
+# dataset = 'split2'
 
+# test the performance of SVD
+
+# find the top k nodes with the highest score
 def find_top_k(predictions, k=50):
     result = np.zeros((predictions.shape[0], k))
     for i in range(predictions.shape[0]):
@@ -27,22 +32,22 @@ num_buyers = 8922
 num_items = 3119
 num_sellers = 4056
 num_nodes_1 = num_buyers + num_items
-edge_list = read_from_txt('data/split/buyer_item.txt')
+edge_list = read_from_txt('data/'+dataset+'/buyer_item.txt')
 edge_index = torch.tensor([edge_list[0], [i + num_buyers for i in edge_list[1]]])
 # print(edge_index.shape)
 
-train_indices = np.loadtxt('data/split/buyer_item_train.txt')
-val_indices = np.loadtxt('data/split/buyer_item_val.txt')
-test_indices = np.loadtxt('data/split/buyer_item_test.txt')
+train_indices = np.loadtxt('data/'+dataset+'/buyer_item_train.txt')
+val_indices = np.loadtxt('data/'+dataset+'/buyer_item_val.txt')
+test_indices = np.loadtxt('data/'+dataset+'/buyer_item_test.txt')
 
 num_nodes2 = num_items + num_sellers
-edge_list2 = read_from_txt('data/split/item_seller.txt')
+edge_list2 = read_from_txt('data/'+dataset+'/item_seller.txt')
 edge_index2 = torch.tensor([edge_list2[0], [i + num_items for i in edge_list2[1]]])
 # print(edge_index2.shape)
 
-train_indices2 = np.loadtxt('data/split/item_seller_train.txt')
-val_indices2 = np.loadtxt('data/split/item_seller_val.txt')
-test_indices2 = np.loadtxt('data/split/item_seller_test.txt')
+train_indices2 = np.loadtxt('data/'+dataset+'/item_seller_train.txt')
+val_indices2 = np.loadtxt('data/'+dataset+'/item_seller_val.txt')
+test_indices2 = np.loadtxt('data/'+dataset+'/item_seller_test.txt')
 
 
 gt_items = {}
@@ -70,7 +75,7 @@ for i in train_indices2:
 
 degrees = R2.sum(axis=1)
 plt.hist(degrees, bins=200)
-plt.title('Degrees of item-seller in train1')
+plt.title('Degrees of item-seller in '+dataset)
 plt.show()
 
 U2, sigma2, Vt2 = svds(R2, k=100)
@@ -104,7 +109,7 @@ for item, gts in gt_items.items():
 # print(item_seller_acc)
 print('item_seller_acc:', np.mean(item_seller_acc))
 
-buyer_test = np.loadtxt('data/split/buyer_test.txt')
+buyer_test = np.loadtxt('data/'+dataset+'/buyer_test.txt')
 items_list = np.arange(num_items) + num_buyers
 # print(items_list)
 # print(test_indices)
@@ -128,7 +133,7 @@ for i in train_indices:
 
 degrees = R.sum(axis=1)
 plt.hist(degrees, bins=200)
-plt.title('Degrees of buyer-item in train1')
+plt.title('Degrees of buyer-item in '+dataset)
 plt.show()
 
 U, sigma, Vt = svds(R, k=100)

@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
+# GraphSAGE model to generate node embeddings
 class GNNStack(torch.nn.Module):
     def __init__(self, input_dim, hidden_dim, output_dim, num_layers, dropout, emb=False):
         super(GNNStack, self).__init__()
@@ -49,6 +50,7 @@ class GNNStack(torch.nn.Module):
         return F.nll_loss(pred, label)
 
 
+# MLP model to classify the relationship between two nodes as positive or negative
 class LinkPredictor(nn.Module):
     def __init__(self, in_channels, hidden_channels, out_channels, num_layers,
                  dropout):
@@ -78,7 +80,8 @@ class LinkPredictor(nn.Module):
         return torch.sigmoid(x)
 
 
-def train(model, link_predictor, emb, edge_index, pos_train_edge, batch_size, optimizer):
+# train an epoch
+def train(model, link_predictor, emb, edge_index, pos_train_edge, batch_size, optimizer, scheduler):
     """
     Runs offline training for model, link_predictor and node embeddings given the message
     edges and supervision edges.
@@ -131,11 +134,13 @@ def train(model, link_predictor, emb, edge_index, pos_train_edge, batch_size, op
         # Backpropagate and update parameters
         loss.backward()
         optimizer.step()
+        scheduler.step()
 
         train_losses.append(loss.item())
     return sum(train_losses) / len(train_losses)
 
 
+# test and output the link prediction accuracy
 def test(model, predictor, emb, edge_index, split_edge, batch_size):
     """
     Evaluates graph model on validation and test edges
@@ -158,18 +163,6 @@ def test(model, predictor, emb, edge_index, split_edge, batch_size):
     pos_test_edge = split_edge['test']['edge'].to(emb.device)
     neg_test_edge = split_edge['test']['edge_neg'].to(emb.device)
 
-    # pos_valid_preds = []
-    # for perm in DataLoader(range(pos_valid_edge.size(0)), batch_size):
-    #     edge = pos_valid_edge[perm].t()
-    #     pos_valid_preds += [predictor(node_emb[edge[0]], node_emb[edge[1]]).squeeze().cpu()]
-    # pos_valid_pred = torch.cat(pos_valid_preds, dim=0)
-    #
-    # neg_valid_preds = []
-    # for perm in DataLoader(range(neg_valid_edge.size(0)), batch_size):
-    #     edge = neg_valid_edge[perm].t()
-    #     neg_valid_preds += [predictor(node_emb[edge[0]], node_emb[edge[1]]).squeeze().cpu()]
-    # neg_valid_pred = torch.cat(neg_valid_preds, dim=0)
-
     pos_test_preds = []
     for perm in DataLoader(range(pos_test_edge.size(0)), batch_size):
         edge = pos_test_edge[perm].t()
@@ -190,25 +183,8 @@ def test(model, predictor, emb, edge_index, split_edge, batch_size):
     #       'Negative:', neg_hits / neg_test_edge.size(0))
     return pos_hits / pos_test_edge.size(0), neg_hits / neg_test_edge.size(0)
 
-    # results = {}
-    # for K in [20, 50, 100]:
-    #     evaluator.K = K
-    #     valid_hits = evaluator.eval({
-    #         'y_pred_pos': pos_valid_pred,
-    #         'y_pred_neg': neg_valid_pred,
-    #     })[f'hits@{K}']
-    #     test_hits = evaluator.eval({
-    #         'y_pred_pos': pos_test_pred,
-    #         'y_pred_neg': neg_test_pred,
-    #     })[f'hits@{K}']
 
-
-#
-#     results[f'Hits@{K}'] = (valid_hits, test_hits)
-
-# return results
-
-
+# evaluate the output the top k recommendations
 def evaluate(model, predictor, emb, edge_index, test_nodes, pair_nodes, batch_size):
     model.eval()
     predictor.eval()
@@ -229,6 +205,7 @@ def evaluate(model, predictor, emb, edge_index, test_nodes, pair_nodes, batch_si
     return result
 
 
+# read from the edge file
 def read_from_txt(file):
     list_from = []
     list_to = []
@@ -243,6 +220,7 @@ def read_from_txt(file):
     return [list_from, list_to, list_weights]
 
 
+# generate recommendations based on purchase history
 def predict_baseline(test_nodes, edge_index, train_indices):
     gt_nodes = {}
     for i in train_indices:

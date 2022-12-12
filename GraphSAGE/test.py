@@ -9,6 +9,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 from utils import *
 
+dataset = 'split'
+# dataset = 'split2'
+
 
 def run(optim_wd=.0,
           epochs=800,
@@ -24,13 +27,13 @@ def run(optim_wd=.0,
     num_items = 3119
     num_sellers = 4056
     num_nodes_1 = num_buyers + num_items
-    edge_list = read_from_txt('data/split/buyer_item.txt')
+    edge_list = read_from_txt('data/'+dataset+'/buyer_item.txt')
     edge_index = torch.tensor([edge_list[0], [i + num_buyers for i in edge_list[1]]])
     # print(edge_index.shape)
 
-    train_indices = np.loadtxt('data/split/buyer_item_train.txt')
-    val_indices = np.loadtxt('data/split/buyer_item_val.txt')
-    test_indices = np.loadtxt('data/split/buyer_item_test.txt')
+    train_indices = np.loadtxt('data/'+dataset+'/buyer_item_train.txt')
+    val_indices = np.loadtxt('data/'+dataset+'/buyer_item_val.txt')
+    test_indices = np.loadtxt('data/'+dataset+'/buyer_item_test.txt')
 
     # split_edge = dataset.get_edge_split()
     pos_train_edge = edge_index.clone()[:, train_indices].T
@@ -40,9 +43,9 @@ def run(optim_wd=.0,
     edge_index = edge_index.to(device)
 
     # evaluator = Evaluator(name='ogbl-ddi')
-    checkpoint = torch.load('checkpoint/model4_2999.pt')
+    checkpoint = torch.load('checkpoint/'+dataset+'model1_3999.pt')
 
-    emb = nn.Embedding.from_pretrained(torch.load('checkpoint/emb4_2999.pt')).to(device)  # each node has an embedding that has to be learnt
+    emb = nn.Embedding.from_pretrained(torch.load('checkpoint/'+dataset+'emb1_3999.pt')).to(device)  # each node has an embedding that has to be learnt
     model = GNNStack(node_emb_dim, hidden_dim, hidden_dim, num_layers, dropout, emb=True).to(
         device)  # the graph neural network that takes all the node embeddings as inputs to message pass and agregate
     link_predictor = LinkPredictor(hidden_dim, hidden_dim, 1, num_layers + 1, dropout).to(
@@ -63,13 +66,13 @@ def run(optim_wd=.0,
     print('buyer_item:', pos_hits, neg_hits)
 
     num_nodes2 = num_items + num_sellers
-    edge_list2 = read_from_txt('data/split/item_seller.txt')
+    edge_list2 = read_from_txt('data/'+dataset+'/item_seller.txt')
     edge_index2 = torch.tensor([edge_list2[0], [i + num_items for i in edge_list2[1]]])
     # print(edge_index2.shape)
 
-    train_indices2 = np.loadtxt('data/split/item_seller_train.txt')
-    val_indices2 = np.loadtxt('data/split/item_seller_val.txt')
-    test_indices2 = np.loadtxt('data/split/item_seller_test.txt')
+    train_indices2 = np.loadtxt('data/'+dataset+'/item_seller_train.txt')
+    val_indices2 = np.loadtxt('data/'+dataset+'/item_seller_val.txt')
+    test_indices2 = np.loadtxt('data/'+dataset+'/item_seller_test.txt')
 
     # split_edge = dataset.get_edge_split()
     pos_train_edge2 = edge_index2.clone()[:, train_indices2].T
@@ -80,13 +83,13 @@ def run(optim_wd=.0,
 
     # evaluator = Evaluator(name='ogbl-ddi')
 
-    checkpoint2 = torch.load('checkpoint/model17_3999.pt')
+    checkpoint2 = torch.load('checkpoint/'+dataset+'model2_3999.pt')
 
-    emb2 = nn.Embedding.from_pretrained(torch.load('checkpoint/emb17_3999.pt')).to(
+    emb2 = nn.Embedding.from_pretrained(torch.load('checkpoint/'+dataset+'emb2_3999.pt')).to(
         device)  # each node has an embedding that has to be learnt
-    model2 = GNNStack(2048, hidden_dim, hidden_dim, 3, dropout, emb=True).to(
+    model2 = GNNStack(2048, hidden_dim, hidden_dim, num_layers, dropout, emb=True).to(
         device)  # the graph neural network that takes all the node embeddings as inputs to message pass and agregate
-    link_predictor2 = LinkPredictor(hidden_dim, hidden_dim, 1, 3 + 1, dropout).to(
+    link_predictor2 = LinkPredictor(hidden_dim, hidden_dim, 1, num_layers + 1, dropout).to(
         device)  # the MLP that takes embeddings of a pair of nodes and predicts the existence of an edge between them
     model2.load_state_dict(checkpoint2['model_state_dict'])
     link_predictor2.load_state_dict(checkpoint2['link_predictor_state_dict'])
@@ -137,7 +140,7 @@ def run(optim_wd=.0,
     # print(item_seller_acc)
     print('item_seller_acc:', np.mean(item_seller_acc))
 
-    buyer_test = np.loadtxt('data/split/buyer_test.txt')
+    buyer_test = np.loadtxt('data/'+dataset+'/buyer_test.txt')
     items_list = np.arange(num_items) + num_buyers
     # print(items_list)
     # print(test_indices)
@@ -179,7 +182,7 @@ def run(optim_wd=.0,
 
 optim_wds = [1e-6]
 epochss = [400, 800, 1200]
-hidden_dims = [512]
+hidden_dims = [256]
 # hidden_dim = 64
 dropouts = [0.3]
 num_layerss = [5]
