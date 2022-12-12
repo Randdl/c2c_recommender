@@ -3,6 +3,11 @@
 ##### Xinyu Gao, Xinxuan Lu
 This repository contains the code for the final project of CS 4352 done by Xinyu Gao and Xinxuan Lu.
 
+## Requirements
+This repository is built on 
+pyg-2.1.0,
+pytorch-1.12.0, cuda-11.3, and torchvision-0.13.0.
+
 ## Folder structure
 ```
 ${ROOT}
