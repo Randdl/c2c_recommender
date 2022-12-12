@@ -65,3 +65,7 @@ To change between split1 (split) and split2, please change the code at the top o
 
 All the checkpoint files created during training are stored in checkpoint/ folder.
 The test files use these checkpoint files. Make sure you run the two training files before running test files.
+
+## Results
+<img src="images/result.png">
+The table shows the recommendation accuracy of the two models by choosing the top 50 items and sellers.
