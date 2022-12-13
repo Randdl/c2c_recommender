@@ -80,7 +80,7 @@ convert_to_data.py: the inputs of convert_to_data.py are buyer_item.txt and item
 the outputs are buyer_item.pt and item_seller.pt (within LightGCN folder). The purpose of this file is to convert information 
 from text format to graph format. 
 
-LightGCN.ipynb: the inputs of LightGCN.ipynb are buyer_item.txt, item_seller.txt, buyer_item.py, and item_seller.py. There are
+LightGCN.ipynb: the inputs of LightGCN.ipynb are buyer_item.txt, item_seller.txt, buyer_item.pt, and item_seller.pt. There are
 five major steps in this file. 1. Develop the LightGCN model 2. Load Data 3. Train buyer_item and item_seller models 4. Calculate metrics
 5. Draw bipartite graphs
 
