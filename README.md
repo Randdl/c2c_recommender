@@ -7,6 +7,7 @@ This repository contains the code for the final project of CS 4352 done by Xinyu
 This repository is built on 
 pyg-2.1.0,
 pytorch-1.12.0, cuda-11.3, and torchvision-0.13.0.
+LightGCN: built on pytorch-1.13.0, cuda-11.6 (colab)
 
 ## Folder structure
 ```
@@ -39,7 +40,10 @@ ${ROOT}
         ├── item_seller_train.txt
         └── item_seller_val.txt
 └── lightGCN/
-    └── train.sh
+    └── convert_to_data.py
+    ├── LightGCN.ipynb
+    ├── buyer_item.pt
+    ├── item_seller.pt
 └── GraphSAGE/
     ├── baseline.py
     ├── graphsage.py
@@ -70,6 +74,16 @@ To change between split1 (split) and split2, please change the code at the top o
 
 All the checkpoint files created during training are stored in checkpoint/ folder.
 The test files use these checkpoint files. Make sure you run the two training files before running test files.
+
+## LightGCN
+convert_to_data.py: the inputs of convert_to_data.py are buyer_item.txt and item_seller.txt (within data foloder) and
+the outputs are buyer_item.pt and item_seller.pt (within LightGCN folder). The purpose of this file is to convert information 
+from text format to graph format. 
+
+LightGCN.ipynb: the inputs of LightGCN.ipynb are buyer_item.txt, item_seller.txt, buyer_item.py, and item_seller.py. There are
+five major steps in this file. 1. Develop the LightGCN model 2. Load Data 3. Train buyer_item and item_seller models 4. Calculate metrics
+5. Draw bipartite graphs
+
 
 ## Results
 <img src="images/result.png">
