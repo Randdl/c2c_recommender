@@ -165,6 +165,11 @@ def run(optim_wd=.0,
     # print(gt_buyers)
     result_buyer = evaluate(model, link_predictor, emb.weight, edge_index, buyer_test, items_list, batch_size)
     gt_result_buyer = predict_baseline(buyer_test, edge_list, train_indices)
+    for buyer in buyer_test:
+        if buyer in gt_result_buyer.keys():
+            nums = len(gt_result_buyer[buyer])
+            test_nodes = result_buyer[buyer]
+            result_buyer[buyer] = test_nodes[:50-nums]
     # print(result_buyer)
     buyer_item_acc = []
     total_acc = []
